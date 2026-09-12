@@ -570,6 +570,17 @@ fun LyricsView(
         }
     }
 
+    // MZKXLF-HOOK: no borrar en merge - exporta la linea activa por UDP a Termux-X11
+    LaunchedEffect(currentLineIndex) {
+        val line = displayLines.lines.getOrNull(currentLineIndex)
+        if (line != null) {
+            com.maxrave.simpmusic.extension.LyricsUdpExporter.send(
+                text = line.words,
+                startMs = line.startTimeMs.toLongOrNull() ?: 0L,
+            )
+        }
+    }
+
     // Read off the SAME list the blur fix built, not off syncType: it is the timestamps that decide
     // whether a line can ever be "the sung one", and [timedLineIndexes] is already empty exactly
     // when they cannot order anything. Every line then renders as the current line — white, fully
