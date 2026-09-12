@@ -1,0 +1,70 @@
+name: Auto-sync upstream and release (Loved <3)
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 8 * * 0'
+
+permissions:
+  contents: write
+
+jobs:
+  sync-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: 'recursive'
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git identity
+        run: |
+          git config --global user.name "loved-bot"
+          git config --global user.email "loved-bot@users.noreply.github.com"
+
+      - name: Merge upstream into core submodule
+        working-directory: core
+        run: |
+          git remote add upstream https://github.com/maxrave-dev/core.git
+          git fetch upstream
+          git checkout dev
+          git merge upstream/multiplatform --no-edit
+          git remote set-url origin https://x-access-token:${{ secrets.CORE_PAT }}@github.com/miguelam32/core.git
+          git push origin dev
+
+      - name: Merge upstream into main repo and bump submodule pointer
+        run: |
+          git remote add upstream https://github.com/maxrave-dev/SimpMusic.git
+          git fetch upstream
+          git checkout dev
+          git merge upstream/dev --no-edit
+          git add core
+          git commit -m "chore: auto-sync upstream + bump core submodule" --allow-empty
+          git push origin dev
+
+      - name: set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: 21
+          distribution: "temurin"
+          cache: 'gradle'
+
+      - name: Update build product flavor
+        run: |
+          echo "" >> ./gradle.properties
+          echo "isFullBuild=true" >> ./gradle.properties
+
+      - name: Generate aboutLibraries.json
+        run: ./gradlew exportLibraryDefinitions
+
+      - name: Build debug APK
+        run: ./gradlew androidApp:assembleDebug
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: auto-${{ github.run_number }}
+          name: "Loved <3 (auto-sync ${{ github.run_number }})"
+          files: androidApp/build/outputs/apk/debug/*.apk
+          body: "Build automatico: ultimos cambios de maxrave-dev/SimpMusic + modificaciones de letras (Loved)."
