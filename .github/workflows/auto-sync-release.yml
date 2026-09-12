@@ -21,7 +21,6 @@ jobs:
           submodules: 'recursive'
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
-          persist-credentials: false
 
       # ============================================================
       # CONFIGURAR IDENTIDAD DE GIT
@@ -42,7 +41,6 @@ jobs:
             echo "❌ CORE_PAT está vacío o no está disponible."
             exit 1
           fi
-
           echo "✅ CORE_PAT está presente."
 
       # ============================================================
@@ -85,7 +83,6 @@ jobs:
           git merge upstream/multiplatform --no-edit
 
           echo "🚀 Subiendo core/dev..."
-
           git push \
             "https://x-access-token:${CORE_PAT}@github.com/miguelam32/core.git" \
             dev
@@ -98,6 +95,9 @@ jobs:
       # ============================================================
       - name: Merge upstream into main repo and bump submodule pointer
         run: |
+          git config submodule.recurse false
+          git config fetch.recurseSubmodules no
+
           git remote add upstream https://github.com/maxrave-dev/SimpMusic.git
 
           echo "📥 Descargando upstream/dev..."
