@@ -30,8 +30,7 @@ jobs:
           git fetch upstream
           git checkout dev
           git merge upstream/multiplatform --no-edit
-          git remote set-url origin https://x-access-token:${{ secrets.CORE_PAT }}@github.com/miguelam32/core.git
-          git push origin dev
+          git push https://x-access-token:${{ secrets.CORE_PAT }}@github.com/miguelam32/core.git dev
 
       - name: Merge upstream into main repo and bump submodule pointer
         run: |
