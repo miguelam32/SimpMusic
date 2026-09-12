@@ -44,26 +44,6 @@ jobs:
           echo "✅ CORE_PAT está presente."
 
       # ============================================================
-      # TEST: COMPROBAR ACCESO AL REPO CORE
-      # ============================================================
-      - name: Test CORE_PAT access to core repository
-        env:
-          CORE_PAT: ${{ secrets.CORE_PAT }}
-        run: |
-          echo "🔎 Probando acceso a miguelam32/core..."
-
-          if git ls-remote \
-            "https://x-access-token:${CORE_PAT}@github.com/miguelam32/core.git" \
-            HEAD >/dev/null 2>&1
-          then
-            echo "✅ CORE_PAT puede acceder a miguelam32/core."
-          else
-            echo "❌ CORE_PAT NO puede acceder a miguelam32/core."
-            echo "Revisa que el token tenga acceso al repositorio y permisos de escritura."
-            exit 1
-          fi
-
-      # ============================================================
       # MERGE UPSTREAM -> CORE/DEV
       # ============================================================
       - name: Merge upstream into core submodule
@@ -133,12 +113,21 @@ jobs:
           cache: 'gradle'
 
       # ============================================================
-      # ACTIVAR FULL BUILD
+      # DECODIFICAR KEYSTORE
+      # ============================================================
+      - name: Set up signing key
+        env:
+          BASE_64_SIGNING_KEY: ${{ secrets.BASE_64_SIGNING_KEY }}
+        run: |
+          echo "$BASE_64_SIGNING_KEY" | base64 -d > simpmusic.jks
+
+      # ============================================================
+      # ACTIVAR BUILD FOSS (sin Sentry/Last.fm)
       # ============================================================
       - name: Update build product flavor
         run: |
           echo "" >> ./gradle.properties
-          echo "isFullBuild=true" >> ./gradle.properties
+          echo "isFullBuild=false" >> ./gradle.properties
 
       # ============================================================
       # GENERAR aboutLibraries.json
@@ -147,10 +136,14 @@ jobs:
         run: ./gradlew exportLibraryDefinitions
 
       # ============================================================
-      # COMPILAR APK DEBUG
+      # COMPILAR Y FIRMAR APK RELEASE (FOSS)
       # ============================================================
-      - name: Build debug APK
-        run: ./gradlew androidApp:assembleDebug
+      - name: Build and sign release APK
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: ./build_and_sign_apk.sh --release --foss
 
       # ============================================================
       # CREAR RELEASE
@@ -160,5 +153,5 @@ jobs:
         with:
           tag_name: auto-${{ github.run_number }}
           name: "Loved <3 (auto-sync ${{ github.run_number }})"
-          files: androidApp/build/outputs/apk/debug/*.apk
+          files: androidApp/build/outputs/apk/release/*.apk
           body: "Build automatico: ultimos cambios de maxrave-dev/SimpMusic + modificaciones de letras (Loved)."
