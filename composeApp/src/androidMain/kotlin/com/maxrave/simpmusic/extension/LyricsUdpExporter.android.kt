@@ -9,13 +9,15 @@ actual object LyricsUdpExporter {
     private val socket by lazy { DatagramSocket() }
 
     actual fun send(text: String, startMs: Long) {
-        try {
-            val payload = "$startMs|$text".toByteArray(Charsets.UTF_8)
-            val packet = DatagramPacket(
-                payload, payload.size,
-                InetAddress.getByName("127.0.0.1"), PORT,
-            )
-            socket.send(packet)
-        } catch (_: Exception) { }
+        Thread {
+            try {
+                val payload = "$startMs|$text".toByteArray(Charsets.UTF_8)
+                val packet = DatagramPacket(
+                    payload, payload.size,
+                    InetAddress.getByName("127.0.0.1"), PORT,
+                )
+                socket.send(packet)
+            } catch (_: Exception) { }
+        }.start()
     }
 }
