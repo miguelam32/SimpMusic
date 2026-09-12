@@ -13,19 +13,26 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # ============================================================
+      # CHECKOUT DEL REPOSITORIO PRINCIPAL
+      # ============================================================
       - uses: actions/checkout@v6
         with:
           submodules: 'recursive'
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
 
+      # ============================================================
+      # CONFIGURAR IDENTIDAD DE GIT
+      # ============================================================
       - name: Configure git identity
         run: |
           git config --global user.name "loved-bot"
           git config --global user.email "loved-bot@users.noreply.github.com"
 
       # ============================================================
-      # TEST 1: comprobar que CORE_PAT existe
+      # TEST: COMPROBAR QUE CORE_PAT EXISTE
       # ============================================================
       - name: Test CORE_PAT exists
         env:
@@ -39,7 +46,7 @@ jobs:
           echo "✅ CORE_PAT está presente."
 
       # ============================================================
-      # TEST 2: comprobar que CORE_PAT puede acceder a miguelam32/core
+      # TEST: COMPROBAR ACCESO AL REPO CORE
       # ============================================================
       - name: Test CORE_PAT access to core repository
         env:
@@ -59,7 +66,7 @@ jobs:
           fi
 
       # ============================================================
-      # SYNC CORE
+      # MERGE UPSTREAM -> CORE/DEV
       # ============================================================
       - name: Merge upstream into core submodule
         working-directory: core
@@ -67,8 +74,14 @@ jobs:
           CORE_PAT: ${{ secrets.CORE_PAT }}
         run: |
           git remote add upstream https://github.com/maxrave-dev/core.git
+
+          echo "📥 Descargando upstream/multiplatform..."
           git fetch upstream
+
+          echo "🌿 Cambiando a core/dev..."
           git checkout dev
+
+          echo "🔀 Haciendo merge de upstream/multiplatform..."
           git merge upstream/multiplatform --no-edit
 
           echo "🚀 Subiendo core/dev..."
@@ -77,23 +90,41 @@ jobs:
             "https://x-access-token:${CORE_PAT}@github.com/miguelam32/core.git" \
             dev
 
+          echo "✅ core/dev actualizado correctamente."
+
       # ============================================================
-      # SYNC MAIN REPOSITORY
+      # MERGE UPSTREAM -> REPO PRINCIPAL
+      # Y ACTUALIZAR PUNTERO DEL SUBMÓDULO
       # ============================================================
       - name: Merge upstream into main repo and bump submodule pointer
         run: |
           git remote add upstream https://github.com/maxrave-dev/SimpMusic.git
+
+          echo "📥 Descargando upstream/dev..."
           git fetch upstream
+
+          echo "🌿 Cambiando a dev..."
           git checkout dev
+
+          echo "🔀 Haciendo merge de upstream/dev..."
           git merge upstream/dev --no-edit
+
+          echo "📌 Actualizando puntero del submódulo core..."
           git add core
-          git commit -m "chore: auto-sync upstream + bump core submodule" --allow-empty
+
+          git commit \
+            -m "chore: auto-sync upstream + bump core submodule" \
+            --allow-empty
+
+          echo "🚀 Subiendo SimpMusic/dev..."
           git push origin dev
 
+          echo "✅ Repositorio principal actualizado correctamente."
+
       # ============================================================
-      # JAVA
+      # CONFIGURAR JDK 21
       # ============================================================
-      - name: set up JDK 21
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
           java-version: 21
@@ -101,21 +132,27 @@ jobs:
           cache: 'gradle'
 
       # ============================================================
-      # FULL BUILD
+      # ACTIVAR FULL BUILD
       # ============================================================
       - name: Update build product flavor
         run: |
           echo "" >> ./gradle.properties
           echo "isFullBuild=true" >> ./gradle.properties
 
+      # ============================================================
+      # GENERAR aboutLibraries.json
+      # ============================================================
       - name: Generate aboutLibraries.json
         run: ./gradlew exportLibraryDefinitions
 
+      # ============================================================
+      # COMPILAR APK DEBUG
+      # ============================================================
       - name: Build debug APK
         run: ./gradlew androidApp:assembleDebug
 
       # ============================================================
-      # RELEASE
+      # CREAR RELEASE
       # ============================================================
       - name: Create Release
         uses: softprops/action-gh-release@v2
