@@ -524,6 +524,7 @@ fun NowPlayingScreenContent(
         // What the ear is hearing right now, which is what a lyric answers to. Keyed on the offset
         // as well so dragging the setting while paused still moves the line.
         val nowMs = timelineState.current - lyricsOffsetMs
+        val previousLineIndexMzk = currentLyricLineIndex
         if (nowMs > 0L) {
             lines.indices.forEach { i ->
                 val startTimeMs = lines[i].startTimeMs.toLongOrNull() ?: 0L
@@ -544,6 +545,16 @@ fun NowPlayingScreenContent(
             }
         } else {
             currentLyricLineIndex = -1
+        }
+        // MZKXLF-HOOK: no borrar en merge - exporta la linea activa por UDP a Termux-X11
+        if (currentLyricLineIndex != previousLineIndexMzk) {
+            val activeLine = lines.getOrNull(currentLyricLineIndex)
+            if (activeLine != null) {
+                com.maxrave.simpmusic.extension.LyricsUdpExporter.send(
+                    text = activeLine.words,
+                    startMs = activeLine.startTimeMs.toLongOrNull() ?: 0L,
+                )
+            }
         }
     }
 
