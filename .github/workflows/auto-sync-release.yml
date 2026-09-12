@@ -82,6 +82,7 @@ jobs:
           echo "🔀 Haciendo merge de upstream/multiplatform..."
           git merge upstream/multiplatform --no-edit
 
+          git config --local --unset-all http.https://github.com/.extraheader || true
           echo "🚀 Subiendo core/dev..."
           git push \
             "https://x-access-token:${CORE_PAT}@github.com/miguelam32/core.git" \
