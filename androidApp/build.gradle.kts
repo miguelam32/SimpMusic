@@ -83,6 +83,7 @@ android {
 
     buildTypes {
         release {
+            applicationIdSuffix = ".loved"
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
