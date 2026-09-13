@@ -73,8 +73,11 @@ jobs:
       # ============================================================
       # MERGE UPSTREAM -> REPO PRINCIPAL
       # Y ACTUALIZAR PUNTERO DEL SUBMÓDULO
+      # (si no hay NADA nuevo -> no se comitea/pushea, y se marca
+      #  changed=false para saltarse compilar + publicar release)
       # ============================================================
       - name: Merge upstream into main repo and bump submodule pointer
+        id: merge_main
         run: |
           git config submodule.recurse false
           git config fetch.recurseSubmodules no
@@ -87,25 +90,32 @@ jobs:
           echo "🌿 Cambiando a dev..."
           git checkout dev
 
+          BEFORE_MAIN=$(git rev-parse HEAD)
+
           echo "🔀 Haciendo merge de upstream/dev..."
           git merge upstream/dev --no-edit
 
-          echo "📌 Actualizando puntero del submódulo core..."
+          AFTER_MERGE_MAIN=$(git rev-parse HEAD)
+
+          echo "📌 Revisando si el puntero del submódulo core cambió..."
           git add core
 
-          git commit \
-            -m "chore: auto-sync upstream + bump core submodule" \
-            --allow-empty
-
-          echo "🚀 Subiendo SimpMusic/dev..."
-          git push origin dev
-
-          echo "✅ Repositorio principal actualizado correctamente."
+          if git diff --cached --quiet && [ "$BEFORE_MAIN" = "$AFTER_MERGE_MAIN" ]; then
+            echo "⏭ No hay cambios nuevos de maxrave-dev (ni en core ni en el repo principal). No se publica release."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            git commit -m "chore: auto-sync upstream + bump core submodule" --allow-empty
+            echo "🚀 Subiendo SimpMusic/dev..."
+            git push origin dev
+            echo "✅ Repositorio principal actualizado correctamente."
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
 
       # ============================================================
       # CONFIGURAR JDK 21
       # ============================================================
       - name: Set up JDK 21
+        if: steps.merge_main.outputs.changed == 'true'
         uses: actions/setup-java@v4
         with:
           java-version: 21
@@ -116,6 +126,7 @@ jobs:
       # DECODIFICAR KEYSTORE
       # ============================================================
       - name: Set up signing key
+        if: steps.merge_main.outputs.changed == 'true'
         env:
           BASE_64_SIGNING_KEY: ${{ secrets.BASE_64_SIGNING_KEY }}
         run: |
@@ -125,6 +136,7 @@ jobs:
       # ACTIVAR BUILD FOSS (sin Sentry/Last.fm)
       # ============================================================
       - name: Update build product flavor
+        if: steps.merge_main.outputs.changed == 'true'
         run: |
           echo "" >> ./gradle.properties
           echo "isFullBuild=false" >> ./gradle.properties
@@ -134,12 +146,14 @@ jobs:
       # GENERAR aboutLibraries.json
       # ============================================================
       - name: Generate aboutLibraries.json
+        if: steps.merge_main.outputs.changed == 'true'
         run: ./gradlew exportLibraryDefinitions
 
       # ============================================================
       # COMPILAR Y FIRMAR APK RELEASE (FOSS)
       # ============================================================
       - name: Build and sign release APK
+        if: steps.merge_main.outputs.changed == 'true'
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ALIAS }}
@@ -150,6 +164,7 @@ jobs:
       # CREAR RELEASE
       # ============================================================
       - name: Create Release
+        if: steps.merge_main.outputs.changed == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: auto-${{ github.run_number }}
