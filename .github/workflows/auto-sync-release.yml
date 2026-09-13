@@ -73,14 +73,29 @@ jobs:
       # ============================================================
       # MERGE UPSTREAM -> REPO PRINCIPAL
       # Y ACTUALIZAR PUNTERO DEL SUBMÓDULO
-      # (si no hay NADA nuevo -> no se comitea/pushea, y se marca
-      #  changed=false para saltarse compilar + publicar release)
+      #
+      # "changed" ahora se decide comparando el commit final de dev
+      # contra el commit exacto del ULTIMO RELEASE PUBLICADO (tag auto-*),
+      # no solo contra si upstream trajo algo. Asi cubre tanto syncs de
+      # upstream como pushes manuales propios (ej. features nuevas del
+      # panel de letras) que todavia no se hayan publicado.
       # ============================================================
       - name: Merge upstream into main repo and bump submodule pointer
         id: merge_main
         run: |
           git config submodule.recurse false
           git config fetch.recurseSubmodules no
+
+          echo "🏷️  Buscando el ultimo release publicado (tag auto-*)..."
+          git fetch --tags origin
+          LAST_TAG=$(git for-each-ref --sort=-creatordate --format='%(refname:short)' 'refs/tags/auto-*' | head -1 || true)
+          if [ -n "$LAST_TAG" ]; then
+            LAST_RELEASED_SHA=$(git rev-list -n 1 "$LAST_TAG")
+            echo "   ultimo tag: $LAST_TAG -> $LAST_RELEASED_SHA"
+          else
+            LAST_RELEASED_SHA=""
+            echo "   no hay tags auto-* todavia (primera vez)"
+          fi
 
           git remote add upstream https://github.com/maxrave-dev/SimpMusic.git
 
@@ -90,24 +105,29 @@ jobs:
           echo "🌿 Cambiando a dev..."
           git checkout dev
 
-          BEFORE_MAIN=$(git rev-parse HEAD)
-
           echo "🔀 Haciendo merge de upstream/dev..."
           git merge upstream/dev --no-edit
-
-          AFTER_MERGE_MAIN=$(git rev-parse HEAD)
 
           echo "📌 Revisando si el puntero del submódulo core cambió..."
           git add core
 
-          if git diff --cached --quiet && [ "$BEFORE_MAIN" = "$AFTER_MERGE_MAIN" ]; then
-            echo "⏭ No hay cambios nuevos de maxrave-dev (ni en core ni en el repo principal). No se publica release."
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          else
+          if ! git diff --cached --quiet; then
             git commit -m "chore: auto-sync upstream + bump core submodule" --allow-empty
             echo "🚀 Subiendo SimpMusic/dev..."
             git push origin dev
             echo "✅ Repositorio principal actualizado correctamente."
+          else
+            echo "ℹ️  Sin cambios en el puntero del submodulo, no se genera commit nuevo."
+          fi
+
+          FINAL_SHA=$(git rev-parse HEAD)
+          echo "   commit actual de dev: $FINAL_SHA"
+
+          if [ -n "$LAST_RELEASED_SHA" ] && [ "$LAST_RELEASED_SHA" = "$FINAL_SHA" ]; then
+            echo "⏭ dev ya esta exactamente en el ultimo release publicado. No se publica release."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "🆕 Hay commits sin publicar (de upstream o propios). Se va a compilar y publicar."
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
