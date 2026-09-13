@@ -128,7 +128,6 @@ import simpmusic.composeapp.generated.resources.this_link_is_not_supported
 import simpmusic.composeapp.generated.resources.unknown
 import simpmusic.composeapp.generated.resources.update_available
 import simpmusic.composeapp.generated.resources.update_message
-import simpmusic.composeapp.generated.resources.version_format
 import simpmusic.composeapp.generated.resources.yes
 import kotlin.time.ExperimentalTime
 
@@ -369,7 +368,7 @@ fun App(
     LaunchedEffect(updateData) {
         val response = updateData ?: return@LaunchedEffect
         if (viewModel.showedUpdateDialog &&
-            response.tagName != getString(Res.string.version_format, VersionManager.getVersionName())
+            response.tagName != VersionManager.getReleaseTag()
         ) {
             shouldShowUpdateDialog = true
         }

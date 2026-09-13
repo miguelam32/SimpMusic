@@ -4,6 +4,7 @@ import com.maxrave.simpmusic.BuildKonfig
 
 object VersionManager {
     private var versionName: String? = null
+    private var releaseTag: String? = null
 
     fun initialize() {
         if (versionName == null) {
@@ -14,9 +15,19 @@ object VersionManager {
                     String()
                 }
         }
+        if (releaseTag == null) {
+            releaseTag =
+                try {
+                    BuildKonfig.releaseTag
+                } catch (_: Exception) {
+                    String()
+                }
+        }
     }
 
     fun getVersionName(): String = removeDevSuffix(versionName ?: String())
+
+    fun getReleaseTag(): String = releaseTag ?: String()
 
     private fun removeDevSuffix(versionName: String): String {
         return if (versionName.endsWith("-dev")) {

@@ -825,6 +825,7 @@ buildkonfig {
                 .get()
                 .toInt()
         buildConfigField(STRING, "versionName", versionName)
+        buildConfigField(STRING, "releaseTag", (project.findProperty("releaseTag") as String?) ?: "v$versionName")
         buildConfigField(INT, "versionCode", "$versionCode")
 
         if (isFullBuild) {
