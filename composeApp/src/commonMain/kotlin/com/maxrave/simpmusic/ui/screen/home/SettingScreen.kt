@@ -512,6 +512,7 @@ fun SettingScreen(
     val videoQuality by viewModel.videoQuality.collectAsStateWithLifecycle()
     val sendData by remember { viewModel.sendBackToGoogle.map { it == TRUE } }.collectAsStateWithLifecycle(initialValue = false)
     val normalizeVolume by remember { viewModel.normalizeVolume.map { it == TRUE } }.collectAsStateWithLifecycle(initialValue = false)
+    val lyricsUdpEnabled by remember { viewModel.lyricsUdpEnabled.map { it == TRUE } }.collectAsStateWithLifecycle(initialValue = true)
     val skipSilent by remember { viewModel.skipSilent.map { it == TRUE } }.collectAsStateWithLifecycle(initialValue = false)
     val savePlaybackState by remember { viewModel.savedPlaybackState.map { it == TRUE } }.collectAsStateWithLifecycle(initialValue = false)
     val saveLastPlayed by remember { viewModel.saveRecentSongAndQueue.map { it == TRUE } }.collectAsStateWithLifecycle(initialValue = false)
@@ -1310,6 +1311,11 @@ fun SettingScreen(
                         title = stringResource(Res.string.normalize_volume),
                         subtitle = stringResource(Res.string.balance_media_loudness),
                         switch = (normalizeVolume to { viewModel.setNormalizeVolume(it) }),
+                    )
+                    SettingItem(
+                        title = "Exportar letras (UDP 4212)",
+                        subtitle = "Manda letra/posicion/cancion al panel de Termux",
+                        switch = (lyricsUdpEnabled to { viewModel.setLyricsUdpEnabled(it) }),
                     )
                     SettingItem(
                         title = stringResource(Res.string.skip_silent),

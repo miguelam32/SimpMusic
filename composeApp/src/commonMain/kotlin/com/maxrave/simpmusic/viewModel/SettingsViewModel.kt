@@ -94,6 +94,9 @@ class SettingsViewModel(
     val loggedIn: StateFlow<String?> = _loggedIn
     private var _normalizeVolume: MutableStateFlow<String?> = MutableStateFlow(null)
     val normalizeVolume: StateFlow<String?> = _normalizeVolume
+
+    private var _lyricsUdpEnabled: MutableStateFlow<String?> = MutableStateFlow(null)
+    val lyricsUdpEnabled: StateFlow<String?> = _lyricsUdpEnabled
     private var _skipSilent: MutableStateFlow<String?> = MutableStateFlow(null)
     val skipSilent: StateFlow<String?> = _skipSilent
     private var _savedPlaybackState: MutableStateFlow<String?> = MutableStateFlow(null)
@@ -282,6 +285,7 @@ class SettingsViewModel(
         getPlayerCacheLimit()
         getLoggedIn()
         getNormalizeVolume()
+        getLyricsUdpEnabled()
         getSkipSilent()
         getSavedPlaybackState()
         getSendBackToGoogle()
@@ -1404,6 +1408,21 @@ class SettingsViewModel(
         viewModelScope.launch {
             dataStoreManager.setNormalizeVolume(normalizeVolume)
             getNormalizeVolume()
+        }
+    }
+
+    fun getLyricsUdpEnabled() {
+        viewModelScope.launch {
+            dataStoreManager.lyricsUdpEnabled.collect { enabled ->
+                _lyricsUdpEnabled.emit(enabled)
+            }
+        }
+    }
+
+    fun setLyricsUdpEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            dataStoreManager.setLyricsUdpEnabled(enabled)
+            getLyricsUdpEnabled()
         }
     }
 
