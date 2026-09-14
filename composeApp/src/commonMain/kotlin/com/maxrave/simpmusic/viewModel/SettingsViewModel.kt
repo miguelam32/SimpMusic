@@ -97,6 +97,8 @@ class SettingsViewModel(
 
     private var _lyricsUdpEnabled: MutableStateFlow<String?> = MutableStateFlow(null)
     val lyricsUdpEnabled: StateFlow<String?> = _lyricsUdpEnabled
+    private var _vuTcpEnabled: MutableStateFlow<String?> = MutableStateFlow(null)
+    val vuTcpEnabled: StateFlow<String?> = _vuTcpEnabled
     private var _skipSilent: MutableStateFlow<String?> = MutableStateFlow(null)
     val skipSilent: StateFlow<String?> = _skipSilent
     private var _savedPlaybackState: MutableStateFlow<String?> = MutableStateFlow(null)
@@ -286,6 +288,7 @@ class SettingsViewModel(
         getLoggedIn()
         getNormalizeVolume()
         getLyricsUdpEnabled()
+        getVuTcpEnabled()
         getSkipSilent()
         getSavedPlaybackState()
         getSendBackToGoogle()
@@ -1423,6 +1426,21 @@ class SettingsViewModel(
         viewModelScope.launch {
             dataStoreManager.setLyricsUdpEnabled(enabled)
             getLyricsUdpEnabled()
+        }
+    }
+
+    fun getVuTcpEnabled() {
+        viewModelScope.launch {
+            dataStoreManager.vuTcpEnabled.collect { enabled ->
+                _vuTcpEnabled.emit(enabled)
+            }
+        }
+    }
+
+    fun setVuTcpEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            dataStoreManager.setVuTcpEnabled(enabled)
+            getVuTcpEnabled()
         }
     }
 

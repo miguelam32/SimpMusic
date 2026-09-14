@@ -225,6 +225,8 @@ fun HomeScreen(
         koinViewModel(),
     sharedViewModel: SharedViewModel =
         koinInject(),
+    settingsViewModel: com.maxrave.simpmusic.viewModel.SettingsViewModel =
+        koinViewModel(),
     navController: NavController,
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -618,6 +620,10 @@ fun HomeScreen(
                                             accountName = accountInfo?.first ?: "",
                                             url = accountInfo?.second ?: "",
                                         )
+                                        Spacer(Modifier.height(8.dp))
+                                    }
+                                    if (index == 0) {
+                                        com.maxrave.simpmusic.ui.screen.home.HomeQuickToggles(settingsViewModel)
                                         Spacer(Modifier.height(8.dp))
                                     }
                                     if (item.title == stringResource(Res.string.quick_picks)) {
