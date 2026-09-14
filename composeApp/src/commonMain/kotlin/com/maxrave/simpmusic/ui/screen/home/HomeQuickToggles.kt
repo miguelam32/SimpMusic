@@ -41,6 +41,8 @@ fun HomeQuickToggles(viewModel: SettingsViewModel, modifier: Modifier = Modifier
         viewModel.vuTcpEnabled.map { it == TRUE }
     }.collectAsStateWithLifecycle(initialValue = false)
 
+    val allOff = !lyricsUdpEnabled && !vuTcpEnabled
+
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -48,7 +50,7 @@ fun HomeQuickToggles(viewModel: SettingsViewModel, modifier: Modifier = Modifier
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         IoToggleChip(
-            active = false,
+            active = allOff,
             highlightColor = Color(0xFFE05353),
             onClick = {
                 viewModel.setLyricsUdpEnabled(false)
