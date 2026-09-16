@@ -1,6 +1,5 @@
 package com.maxrave.simpmusic.ui.screen.home
 
-import com.maxrave.simpmusic.expect.ui.PlatformBackdrop
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
@@ -221,7 +220,6 @@ private val listOfHomeChip =
 @ExperimentalFoundationApi
 @Composable
 fun HomeScreen(
-    backdrop: PlatformBackdrop,
     onScrolling: (onTop: Boolean) -> Unit = {},
     viewModel: HomeViewModel =
         koinViewModel(),
@@ -628,7 +626,7 @@ fun HomeScreen(
                                         Spacer(Modifier.height(8.dp))
                                     }
                                     if (index == 0) {
-                                        com.maxrave.simpmusic.ui.screen.home.HomeQuickToggles(settingsViewModel, backdrop = backdrop)
+                                        com.maxrave.simpmusic.ui.screen.home.HomeQuickToggles(settingsViewModel, hazeState = hazeState)
                                         Spacer(Modifier.height(8.dp))
                                     }
                                     if (item.title == stringResource(Res.string.quick_picks)) {
