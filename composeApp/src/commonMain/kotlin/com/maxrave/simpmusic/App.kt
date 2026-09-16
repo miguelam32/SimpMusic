@@ -570,6 +570,7 @@ fun App(
                                     ).hazeSource(hazeState),
                             ) {
                                 AppNavigationGraph(
+                                    backdrop = backdrop,
                                     innerPadding = innerPadding,
                                     navController = navController,
                                     hideNavBar = {

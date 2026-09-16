@@ -11,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import com.maxrave.simpmusic.expect.ui.PlatformBackdrop
 import com.maxrave.simpmusic.ui.navigation.destination.home.AnalyticsDestination
 import com.maxrave.simpmusic.ui.navigation.destination.home.HomeDestination
 import com.maxrave.simpmusic.ui.navigation.destination.home.WrappedDestination
@@ -31,6 +32,7 @@ import com.maxrave.simpmusic.ui.screen.player.FullscreenPlayer
 @ExperimentalMaterial3Api
 @ExperimentalFoundationApi
 fun AppNavigationGraph(
+    backdrop: PlatformBackdrop,
     innerPadding: PaddingValues,
     navController: NavHostController,
     startDestination: Any = HomeDestination,
@@ -58,6 +60,7 @@ fun AppNavigationGraph(
         // Bottom bar destinations
         composable<HomeDestination> {
             HomeScreen(
+                backdrop = backdrop,
                 onScrolling = onScrolling,
                 navController = navController,
             )
