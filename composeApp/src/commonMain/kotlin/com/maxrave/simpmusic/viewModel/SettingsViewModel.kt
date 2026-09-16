@@ -278,6 +278,8 @@ class SettingsViewModel(
         }
     }
 
+    fun getAudioSessionId() = mediaPlayerHandler.player.audioSessionId
+
     fun getData() {
         getLocation()
         getLanguage()
@@ -1553,6 +1555,7 @@ class SettingsViewModel(
                                                         ?.url ?: "",
                                                 cache = accountRepository.getYouTubeCookie(),
                                                 pageId = it.first().pageId,
+                                                authUser = it.first().authUser,
                                                 isUsed = true,
                                             ),
                                         ).singleOrNull()
@@ -1578,6 +1581,7 @@ class SettingsViewModel(
     ): Boolean {
         val currentCookie = dataStoreManager.cookie.first()
         val currentPageId = dataStoreManager.pageId.first()
+        val currentAuthUser = dataStoreManager.authUser.first()
         val currentLoggedIn = dataStoreManager.loggedIn.first() == DataStoreManager.TRUE
         try {
             runBlocking {
@@ -1632,6 +1636,7 @@ class SettingsViewModel(
                                     isUsed = index == 0,
                                     netscapeCookie = cookieItem,
                                     pageId = account.pageId,
+                                    authUser = account.authUser,
                                 ),
                             ).firstOrNull()
                             ?.let {
@@ -1639,14 +1644,14 @@ class SettingsViewModel(
                             }
                     }
                     dataStoreManager.setLoggedIn(true)
-                    dataStoreManager.setCookie(cookie, accountInfoList.first().pageId)
+                    dataStoreManager.setCookie(cookie, accountInfoList.first().pageId, accountInfoList.first().authUser)
                     getAllGoogleAccount()
                     getLoggedIn()
                     true
                 } ?: run {
                 Logger.w("getAllGoogleAccount", "addAccount: Account info is null")
                 runBlocking {
-                    dataStoreManager.setCookie(currentCookie, currentPageId)
+                    dataStoreManager.setCookie(currentCookie, currentPageId, currentAuthUser)
                     dataStoreManager.setLoggedIn(currentLoggedIn)
                 }
                 false
@@ -1655,7 +1660,7 @@ class SettingsViewModel(
             e.printStackTrace()
             Logger.e("getAllGoogleAccount", "addAccount: ${e.message}")
             runBlocking {
-                dataStoreManager.setCookie(currentCookie, currentPageId)
+                dataStoreManager.setCookie(currentCookie, currentPageId, currentAuthUser)
                 dataStoreManager.setLoggedIn(currentLoggedIn)
             }
             return false
@@ -1684,7 +1689,7 @@ class SettingsViewModel(
                 acc.netscapeCookie?.let { commonRepository.writeTextToFile(it, (getFileDir() + "/ytdlp-cookie.txt")) }.let {
                     Logger.d("getAllGoogleAccount", "addAccount: write cookie file: $it")
                 }
-                dataStoreManager.setCookie(acc.cache ?: "", acc.pageId)
+                dataStoreManager.setCookie(acc.cache ?: "", acc.pageId, acc.authUser)
                 dataStoreManager.setLoggedIn(true)
                 delay(500)
                 getAllGoogleAccount()
@@ -1782,6 +1787,15 @@ class SettingsViewModel(
         }
     }
 
+    private var _equalizerType: MutableStateFlow<String> = MutableStateFlow(DataStoreManager.EQUALIZER_TYPE_BUILT_IN)
+    val equalizerType: StateFlow<String> = _equalizerType
+
+    fun setEqualizerType(type: String) {
+        viewModelScope.launch {
+            dataStoreManager.setEqualizerType(type)
+        }
+    }
+
     private var _equalizerBands: MutableStateFlow<List<Float>> = MutableStateFlow(List(EQUALIZER_BAND_COUNT) { 0f })
     val equalizerBands: StateFlow<List<Float>> = _equalizerBands
 
@@ -1799,7 +1813,7 @@ class SettingsViewModel(
      * equalizer block itself, which asks on its own so it keeps working if it is ever hosted
      * anywhere else. Both land on this same view model, and the collectors live in
      * [viewModelScope] rather than in a composition — so without this, toggling the switch off and
-     * on left another four behind every time, each re-reading the preference file for a value
+     * on left another five behind every time, each re-reading the preference file for a value
      * three others were already publishing.
      */
     private var equalizerCollectorsStarted = false
@@ -1812,6 +1826,9 @@ class SettingsViewModel(
                 dataStoreManager.equalizerEnabled.collect {
                     _equalizerEnabled.emit(it == DataStoreManager.TRUE)
                 }
+            }
+            launch {
+                dataStoreManager.equalizerType.collect { _equalizerType.emit(it) }
             }
             launch {
                 dataStoreManager.equalizerBands.collect { stored ->
