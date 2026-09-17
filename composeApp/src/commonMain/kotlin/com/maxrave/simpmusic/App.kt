@@ -443,7 +443,6 @@ fun App(
         val isLightScheme = MaterialTheme.colorScheme.background.luminance() > 0.5f
         val backdrop = rememberBackdrop(if (isLightScheme) Color.White else Color.Black)
         val settingsViewModel: SettingsViewModel = koinViewModel()
-        val isInHomeDestination = navBackStackEntry?.destination?.hasRoute(HomeDestination::class) == true
 
         // The desktop shell is a window colour with panels floating on it. The two schemes mirror
         // each other: the window takes the extreme (pure black / pure white) and the panel steps
@@ -487,7 +486,10 @@ fun App(
                                 )
                             }
                             if (isLiquidGlassEnabled == TRUE) {
-                                if (isInHomeDestination) {
+                                AnimatedVisibility(
+                                    visible = true,
+                                    enter = fadeIn(),
+                                ) {
                                     HomeQuickToggles(
                                         viewModel = settingsViewModel,
                                         backdrop = backdrop,
