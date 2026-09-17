@@ -115,6 +115,9 @@ import kotlinx.datetime.toLocalDateTime
 import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
+import org.koin.compose.viewmodel.koinViewModel
+import com.maxrave.simpmusic.ui.screen.home.HomeQuickToggles
+import com.maxrave.simpmusic.viewModel.SettingsViewModel
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.cancel
 import simpmusic.composeapp.generated.resources.do_not_show_again
@@ -439,6 +442,8 @@ fun App(
         // Read inside AppTheme so MaterialTheme reflects the resolved scheme (light background is #FFFFFF).
         val isLightScheme = MaterialTheme.colorScheme.background.luminance() > 0.5f
         val backdrop = rememberBackdrop(if (isLightScheme) Color.White else Color.Black)
+        val settingsViewModel: SettingsViewModel = koinViewModel()
+        val isInHomeDestination = navBackStackEntry?.destination?.hasRoute(HomeDestination::class) == true
 
         // The desktop shell is a window colour with panels floating on it. The two schemes mirror
         // each other: the window takes the extreme (pure black / pure white) and the panel steps
@@ -482,6 +487,12 @@ fun App(
                                 )
                             }
                             if (isLiquidGlassEnabled == TRUE) {
+                                if (isInHomeDestination) {
+                                    HomeQuickToggles(
+                                        viewModel = settingsViewModel,
+                                        backdrop = backdrop,
+                                    )
+                                }
                                 LiquidGlassAppBottomNavigationBar(
                                     navController = navController,
                                     backdrop = backdrop,

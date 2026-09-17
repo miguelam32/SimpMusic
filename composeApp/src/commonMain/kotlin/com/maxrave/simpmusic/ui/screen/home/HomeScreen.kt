@@ -626,7 +626,6 @@ fun HomeScreen(
                                         Spacer(Modifier.height(8.dp))
                                     }
                                     if (index == 0) {
-                                        com.maxrave.simpmusic.ui.screen.home.HomeQuickToggles(settingsViewModel, hazeState = hazeState)
                                         Spacer(Modifier.height(8.dp))
                                     }
                                     if (item.title == stringResource(Res.string.quick_picks)) {

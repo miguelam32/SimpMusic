@@ -18,7 +18,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
@@ -28,19 +27,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.kyant.backdrop.highlight.Highlight
 import com.maxrave.domain.manager.DataStoreManager.Values.TRUE
+import com.maxrave.simpmusic.expect.ui.PlatformBackdrop
+import com.maxrave.simpmusic.ui.component.liquidGlass
 import com.maxrave.simpmusic.viewModel.SettingsViewModel
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeEffect
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
-import dev.chrisbanes.haze.materials.HazeMaterials
 import kotlinx.coroutines.flow.map
 
-@OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 fun HomeQuickToggles(
     viewModel: SettingsViewModel,
-    hazeState: HazeState,
+    backdrop: PlatformBackdrop,
     modifier: Modifier = Modifier,
 ) {
     val lyricsUdpEnabled by remember {
@@ -62,7 +59,7 @@ fun HomeQuickToggles(
         IoToggleChip(
             active = allOff,
             highlightColor = Color(0xFFE05353),
-            hazeState = hazeState,
+            backdrop = backdrop,
             onClick = {
                 viewModel.setLyricsUdpEnabled(false)
                 viewModel.setVuTcpEnabled(false)
@@ -74,7 +71,7 @@ fun HomeQuickToggles(
         IoToggleChip(
             active = vuTcpEnabled,
             highlightColor = Color(0xFF8A5CF6),
-            hazeState = hazeState,
+            backdrop = backdrop,
             onClick = { viewModel.setVuTcpEnabled(!vuTcpEnabled) },
         ) {
             ChipIcon(active = vuTcpEnabled)
@@ -83,7 +80,7 @@ fun HomeQuickToggles(
         IoToggleChip(
             active = lyricsUdpEnabled,
             highlightColor = Color(0xFF8A5CF6),
-            hazeState = hazeState,
+            backdrop = backdrop,
             onClick = { viewModel.setLyricsUdpEnabled(!lyricsUdpEnabled) },
         ) {
             Text(
@@ -103,7 +100,6 @@ private fun ChipIcon(active: Boolean, modifier: Modifier = Modifier.size(18.dp))
         val bodyInset = size.width * 0.22f
         val bodySize = Size(size.width - bodyInset * 2, size.height - bodyInset * 2)
         val bodyTopLeft = androidx.compose.ui.geometry.Offset(bodyInset, bodyInset)
-        // Cuerpo del IC
         drawRoundRect(
             color = color,
             topLeft = bodyTopLeft,
@@ -111,12 +107,10 @@ private fun ChipIcon(active: Boolean, modifier: Modifier = Modifier.size(18.dp))
             cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.width * 0.08f),
             style = androidx.compose.ui.graphics.drawscope.Stroke(width = size.width * 0.09f),
         )
-        // Patas: 3 arriba, 3 abajo, saliendo del cuerpo hacia afuera
         val pinLength = bodyInset * 0.9f
         val strokeW = size.width * 0.07f
         val xs = listOf(0.28f, 0.5f, 0.72f).map { it * size.width }
         for (x in xs) {
-            // arriba
             drawLine(
                 color = color,
                 start = androidx.compose.ui.geometry.Offset(x, bodyTopLeft.y),
@@ -124,7 +118,6 @@ private fun ChipIcon(active: Boolean, modifier: Modifier = Modifier.size(18.dp))
                 strokeWidth = strokeW,
                 cap = StrokeCap.Round,
             )
-            // abajo
             drawLine(
                 color = color,
                 start = androidx.compose.ui.geometry.Offset(x, bodyTopLeft.y + bodySize.height),
@@ -136,12 +129,11 @@ private fun ChipIcon(active: Boolean, modifier: Modifier = Modifier.size(18.dp))
     }
 }
 
-@OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 private fun IoToggleChip(
     active: Boolean,
     highlightColor: Color,
-    hazeState: HazeState,
+    backdrop: PlatformBackdrop,
     onClick: () -> Unit,
     content: @Composable () -> Unit,
 ) {
@@ -152,10 +144,12 @@ private fun IoToggleChip(
         border = BorderStroke(1.dp, if (active) highlightColor else Color(0x55FFFFFF)),
         modifier = Modifier
             .height(36.dp)
-            .clip(shape)
-            .hazeEffect(hazeState, style = HazeMaterials.ultraThin()) {
-                blurEnabled = true
-            }
+            .liquidGlass(
+                backdrop = backdrop,
+                shape = shape,
+                interactive = true,
+                highlight = Highlight.Plain,
+            )
             .clickable(onClick = onClick),
     ) {
         Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 16.dp)) {
