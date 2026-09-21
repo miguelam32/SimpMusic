@@ -907,7 +907,7 @@ fun HomeTopAppBar(navController: NavController) {
         title = {
             Column {
                 Text(
-                    text = stringResource(Res.string.app_name),
+                    text = "I miss you",
                     style = typo().titleMedium,
                     color = MaterialTheme.colorScheme.onBackground,
                     modifier = Modifier.padding(bottom = 4.dp),
