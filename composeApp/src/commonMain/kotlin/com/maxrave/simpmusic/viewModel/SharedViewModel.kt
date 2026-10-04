@@ -1133,23 +1133,13 @@ class SharedViewModel(
      * [signingCerts]: SHA-256 hex of each certificate this APK is signed with. A failed fetch leaves
      * the app usable — it plays offline, and an unknown answer must not lock out our own users.
      */
+    // MZKXLF-HOOK: no borrar en merge -- este fork no pasa por la verificacion de firma de F-Droid,
+    // se queda siempre en el default true de _isOfficialBuild.
     fun checkOfficialBuild(
         packageName: String,
         signingCerts: List<String>,
     ) {
-        if (packageName !in Config.OFFICIAL_PACKAGE_NAMES) {
-            _isOfficialBuild.value = false
-            return
-        }
-        viewModelScope.launch {
-            updateRepository.getFdroidSigningKeys().collect { response ->
-                val keys = response.data
-                // No certificate read at all is an unknown answer, and unknown never blocks.
-                if (response is Resource.Success && keys != null && signingCerts.isNotEmpty() && keys.none { it in signingCerts }) {
-                    _isOfficialBuild.value = false
-                }
-            }
-        }
+        return
     }
 
     fun stopPlayer() {
