@@ -112,15 +112,17 @@ import com.maxrave.domain.mediaservice.handler.RepeatState
 import com.maxrave.simpmusic.Platform
 import com.maxrave.simpmusic.expect.ui.MediaPlayerView
 import com.maxrave.simpmusic.expect.ui.MediaPlayerViewWithSubtitle
-import com.maxrave.simpmusic.expect.ui.PlatformCastButton
 import com.maxrave.simpmusic.expect.ui.toImageBitmap
+import com.maxrave.simpmusic.extension.elapsedLabel
 import com.maxrave.simpmusic.extension.formatDuration
+import com.maxrave.simpmusic.extension.lengthLabel
 import com.maxrave.simpmusic.extension.getColorFromPalette
 import com.maxrave.simpmusic.extension.getScreenSizeInfo
 import com.maxrave.simpmusic.extension.isElementVisible
 import com.maxrave.simpmusic.extension.parseTimestampToMilliseconds
 import com.maxrave.simpmusic.extension.smoothScrimBrush
 import com.maxrave.simpmusic.getPlatform
+import com.maxrave.simpmusic.ui.component.LyricText
 import com.maxrave.simpmusic.ui.component.AIBadge
 import com.maxrave.simpmusic.ui.component.DescriptionView
 import com.maxrave.simpmusic.ui.component.ExplicitBadge
@@ -135,6 +137,7 @@ import com.maxrave.simpmusic.ui.icon.AddCircleOutline
 import com.maxrave.simpmusic.ui.icon.CheckCircle
 import com.maxrave.simpmusic.ui.icon.Forward5
 import com.maxrave.simpmusic.ui.icon.Fullscreen
+import com.maxrave.simpmusic.ui.icon.Headphones
 import com.maxrave.simpmusic.ui.icon.Info
 import com.maxrave.simpmusic.ui.icon.MoreVert
 import com.maxrave.simpmusic.ui.icon.PlaylistAdd
@@ -145,12 +148,12 @@ import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.icon.Subtitles
 import com.maxrave.simpmusic.ui.icon.SubtitlesOff
 import com.maxrave.simpmusic.ui.icon.ThumbsUpDown
+import com.maxrave.simpmusic.ui.screen.player.content.applemusic.AudioOutputSheetHost
 import com.maxrave.simpmusic.ui.theme.blackMoreOverlay
 import com.maxrave.simpmusic.ui.theme.overlay
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.LyricsProvider
 import com.maxrave.simpmusic.viewModel.UIEvent
-import kotlin.math.roundToLong
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -158,6 +161,7 @@ import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.artists
+import simpmusic.composeapp.generated.resources.audio_output
 import simpmusic.composeapp.generated.resources.crossfading
 import simpmusic.composeapp.generated.resources.description
 import simpmusic.composeapp.generated.resources.like_and_dislike
@@ -201,6 +205,7 @@ fun NowPlayingContentSpotify(
     val isRepeatOne = state.controllerState.repeatState is RepeatState.One
 
     var showShareLyricsSheet by rememberSaveable { mutableStateOf(false) }
+    var showOutputSheet by rememberSaveable { mutableStateOf(false) }
 
     // Height
     var topAppBarHeightDp by rememberSaveable {
@@ -328,7 +333,9 @@ fun NowPlayingContentSpotify(
                 ) { page ->
                     val pageTrack = state.artworkQueue.getOrNull(page)
                     val isCurrentArtworkPage = page == state.currentOrderIndex
-                    val pageHasCanvas = isCurrentArtworkPage && state.screenData.canvasData != null
+                    // A canvas that fills the page; Apple Music's animated artwork is drawn separately (Layer 3).
+                    val pageHasCanvas = isCurrentArtworkPage && state.screenData.fullscreenCanvas() != null
+                    val pageAnimatedArtwork = state.screenData.canvasData?.takeIf { isCurrentArtworkPage && it.isAnimatedArtwork() }
 
                     // Per-page palette state for the gradient backdrop.
                     // The bitmap is fed in by Layer 2's adjacent-thumbnail AsyncImage
@@ -568,11 +575,20 @@ fun NowPlayingContentSpotify(
                                                 Modifier
                                                     .align(Alignment.Center)
                                                     .padding(3.dp)
-                                                    .fillMaxWidth()
-                                                    .background(Color.Transparent)
-                                                    .aspectRatio(
-                                                        if (!state.screenData.isVideo) 1f else 16f / 9,
-                                                    ).clip(
+                                                    .then(
+                                                        // Hidden while the video plays, but its box is what
+                                                        // the shadow above is cast from — so it takes the
+                                                        // video frame's shape, or a 16:9 shadow rings a
+                                                        // tall video.
+                                                        if (state.screenData.isVideo && state.shouldShowVideo) {
+                                                            Modifier.aspectRatio(state.videoAspectRatio)
+                                                        } else {
+                                                            Modifier
+                                                                .fillMaxWidth()
+                                                                .aspectRatio(if (!state.screenData.isVideo) 1f else 16f / 9)
+                                                        },
+                                                    ).background(Color.Transparent)
+                                                    .clip(
                                                         RoundedCornerShape(8.dp),
                                                     ).alpha(
                                                         if (!state.screenData.isVideo || !state.shouldShowVideo) 1f else 0f,
@@ -588,11 +604,14 @@ fun NowPlayingContentSpotify(
                                         var internalShowSubtitle by rememberSaveable {
                                             mutableStateOf(true)
                                         }
+                                        // The frame takes the video's own shape, fitted into the
+                                        // square slot: a wide video spans its width, a tall one
+                                        // its height. The slot itself never changes, so nothing
+                                        // below the artwork moves.
                                         Box(
                                             modifier =
                                                 Modifier
-                                                    .fillMaxWidth()
-                                                    .aspectRatio(16f / 9)
+                                                    .aspectRatio(state.videoAspectRatio)
                                                     .clip(RoundedCornerShape(8.dp))
                                                     .background(Color.Black),
                                         ) {
@@ -789,6 +808,19 @@ fun NowPlayingContentSpotify(
                                 }
                             }
                         }
+
+                        // ── Layer 3: Apple Music's animated artwork (current track) ──
+                        // Not a canvas: it plays the Apple Music style's way, edge to edge at the
+                        // top of the page and dissolving into a mesh of its own colours, under
+                        // controls that never hide. Covers Layers 0–2 once its still is up.
+                        if (pageAnimatedArtwork != null) {
+                            AppleMusicAnimatedArtworkPage(
+                                canvas = pageAnimatedArtwork,
+                                cover = state.screenData.bitmap,
+                                topChrome = topAppBarHeightDp.dp,
+                                pageColor = PlayerBackdropColor,
+                            )
+                        }
                     }
                 }
 
@@ -929,7 +961,7 @@ fun NowPlayingContentSpotify(
                                 // Canvas mode has its own subtitle overlay — never show both.
                                 val currentLyricLineText =
                                     if (!hasSyncedLyrics ||
-                                        state.screenData.canvasData != null ||
+                                        state.screenData.fullscreenCanvas() != null ||
                                         state.currentLyricLineIndex < 0
                                     ) {
                                         ""
@@ -946,7 +978,7 @@ fun NowPlayingContentSpotify(
                                     animationSpec = tween(durationMillis = 300),
                                     label = "inlineLyricLine",
                                 ) { lineText ->
-                                    Text(
+                                    LyricText(
                                         text = lineText,
                                         style = typo().labelSmall,
                                         color = Color.White,
@@ -1024,13 +1056,25 @@ fun NowPlayingContentSpotify(
                                             ) {
                                                 Icon(imageVector = SimpIcons.Info, tint = Color.White, contentDescription = "")
                                             }
+                                            // Where the sound goes: the phone's own outputs and the Cast
+                                            // receivers in one sheet, the same one the Apple Music style opens.
                                             // Cyan rather than colorScheme.primary: this screen is force-dark whatever
                                             // the app theme is, so a light-theme primary would sink into the black
                                             // backdrop. Mirrors the `if (forceDark) Color.Cyan` rule in FullWidthItems.
-                                            PlatformCastButton(
-                                                modifier = Modifier.size(24.dp),
-                                                tint = if (state.castState.isRemote) Color.Cyan else Color.White,
-                                            )
+                                            IconButton(
+                                                modifier =
+                                                    Modifier
+                                                        .size(24.dp)
+                                                        .aspectRatio(1f)
+                                                        .clip(CircleShape),
+                                                onClick = { showOutputSheet = true },
+                                            ) {
+                                                Icon(
+                                                    imageVector = SimpIcons.Headphones,
+                                                    tint = if (state.castState.isRemote) Color.Cyan else Color.White,
+                                                    contentDescription = stringResource(Res.string.audio_output),
+                                                )
+                                            }
                                             AnimatedVisibility(visible = state.castState.isRemote) {
                                                 Text(
                                                     text =
@@ -1151,7 +1195,7 @@ fun NowPlayingContentSpotify(
                                                     Column(
                                                         modifier = Modifier.fillMaxWidth(),
                                                     ) {
-                                                        Text(
+                                                        LyricText(
                                                             modifier =
                                                                 Modifier
                                                                     .fillMaxWidth()
@@ -1175,7 +1219,7 @@ fun NowPlayingContentSpotify(
                                                                 ?.words
                                                                 ?.stripRichSyncTimestamps()
                                                         if (!translatedLineText.isNullOrBlank()) {
-                                                            Text(
+                                                            LyricText(
                                                                 modifier =
                                                                     Modifier
                                                                         .fillMaxWidth()
@@ -1186,6 +1230,7 @@ fun NowPlayingContentSpotify(
                                                                             animationMode = MarqueeAnimationMode.Immediately,
                                                                         ).focusable(),
                                                                 text = translatedLineText,
+                                                                alignmentText = lineText,
                                                                 style = typo().bodyMedium,
                                                                 color = Color.Yellow,
                                                                 maxLines = 1,
@@ -1681,6 +1726,13 @@ fun NowPlayingContentSpotify(
             )
         }
     }
+
+    if (showOutputSheet) {
+        AudioOutputSheetHost(
+            castState = state.castState,
+            onDismiss = { showOutputSheet = false },
+        )
+    }
 }
 
 // The focused info layout (controls visible) and the canvas-unfocused overlay rendered this
@@ -1702,7 +1754,7 @@ internal fun NowPlayingTrackInfoRow(
                 .padding(horizontal = 20.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        AnimatedVisibility(showCanvasThumbnail && state.screenData.canvasData != null) {
+        AnimatedVisibility(showCanvasThumbnail && state.screenData.fullscreenCanvas() != null) {
             AsyncImage(
                 model =
                     ImageRequest
@@ -1762,6 +1814,7 @@ internal fun NowPlayingTrackInfoRow(
                     Text(
                         text = state.screenData.artistName,
                         style = typo().bodyMedium,
+                        color = state.secondaryTextColor(),
                         maxLines = 1,
                         modifier =
                             Modifier
@@ -1971,8 +2024,9 @@ internal fun ColumnScope.SpotifyPlaybackControls(
             .padding(horizontal = 20.dp),
     ) {
         Text(
-            text = formatDuration((state.timelineState.total * (state.sliderValue / 100f)).roundToLong()),
+            text = state.timelineState.elapsedLabel(state.sliderValue / 100f),
             style = typo().bodyMedium,
+            color = state.secondaryTextColor(),
             modifier = Modifier.weight(1f),
             textAlign = TextAlign.Left,
         )
@@ -2023,8 +2077,9 @@ internal fun ColumnScope.SpotifyPlaybackControls(
             )
         }
         Text(
-            text = formatDuration(state.timelineState.total),
+            text = state.timelineState.lengthLabel(),
             style = typo().bodyMedium,
+            color = state.secondaryTextColor(),
             modifier = Modifier.weight(1f),
             textAlign = TextAlign.Right,
         )

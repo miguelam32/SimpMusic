@@ -99,8 +99,10 @@ import com.maxrave.domain.utils.toSongEntity
 import com.maxrave.domain.utils.toTrack
 import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.Platform
+import com.maxrave.simpmusic.expect.ui.HorizontalScrollBar
 import com.maxrave.simpmusic.extension.angledGradientBackground
 import com.maxrave.simpmusic.extension.artworkScrimBrush
+import com.maxrave.simpmusic.extension.getScreenSizeInfo
 import com.maxrave.simpmusic.extension.isScrollingUp
 import com.maxrave.simpmusic.extension.rgbFactor
 import com.maxrave.simpmusic.getPlatform
@@ -136,6 +138,7 @@ import com.maxrave.simpmusic.ui.navigation.destination.home.RecentlySongsDestina
 import com.maxrave.simpmusic.ui.navigation.destination.home.SettingsDestination
 import com.maxrave.simpmusic.ui.navigation.destination.library.LibraryDynamicPlaylistDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.ArtistDestination
+import com.maxrave.simpmusic.ui.navigation.destination.list.PodcastDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.PlaylistDestination
 import com.maxrave.simpmusic.ui.navigation.destination.login.LoginDestination
 import com.maxrave.simpmusic.ui.screen.library.LibraryDynamicPlaylistType
@@ -155,10 +158,10 @@ import com.maxrave.simpmusic.viewModel.HomeViewModel.Companion.HOME_PARAMS_SLEEP
 import com.maxrave.simpmusic.viewModel.HomeViewModel.Companion.HOME_PARAMS_WORKOUT
 import com.maxrave.simpmusic.viewModel.ListState
 import com.maxrave.simpmusic.viewModel.SharedViewModel
-import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.HazeInput
+import dev.chrisbanes.haze.blur.hazeBlur
+import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
-import dev.chrisbanes.haze.materials.HazeMaterials
 import dev.chrisbanes.haze.rememberHazeState
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
@@ -216,7 +219,7 @@ private val listOfHomeChip =
         Res.string.focus,
     )
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @ExperimentalFoundationApi
 @Composable
 fun HomeScreen(
@@ -314,9 +317,7 @@ fun HomeScreen(
     }
 
     val hazeState =
-        rememberHazeState(
-            blurEnabled = true,
-        )
+        rememberHazeState()
 
     LaunchedEffect(scrollState) {
         snapshotFlow { scrollState.firstVisibleItemIndex }
@@ -575,7 +576,7 @@ fun HomeScreen(
                     }
                     LazyColumn(
                         state = scrollState,
-                        verticalArrangement = Arrangement.spacedBy(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         itemsIndexed(homeData, key = { _, item ->
                             item.hashCode().toString() + (mainHomeThumbnail ?: "nothumb")
@@ -813,9 +814,7 @@ fun HomeScreen(
                                 Modifier.background(Color.Transparent)
                             } else {
                                 Modifier
-                                    .hazeEffect(hazeState, style = HazeMaterials.ultraThin()) {
-                                        blurEnabled = true
-                                    }
+                                    .hazeBlur(HazeInput.Sources(hazeState), HazeMaterials.ultraThin().then { blurEnabled(true) })
                             },
                         ).onGloballyPositioned { coordinates ->
                             topAppBarHeightPx = coordinates.size.height
@@ -1003,6 +1002,10 @@ fun AccountLayout(
     }
 }
 
+// Portrait fills the width with one column (the next one peeking in). On a landscape window that one
+// column stretched across the whole screen, so every row there is capped instead.
+private val LandscapeGridItemMaxWidth = 400.dp
+
 @ExperimentalFoundationApi
 @Composable
 fun QuickPicks(
@@ -1012,6 +1015,7 @@ fun QuickPicks(
 ) {
     val lazyListState = rememberLazyGridState()
     val snapperFlingBehavior = rememberSnapFlingBehavior(SnapLayoutInfoProvider(lazyGridState = lazyListState, snapPosition = SnapPosition.Start))
+    val isPortrait = getScreenSizeInfo().let { it.wDP < it.hDP }
     val density = LocalDensity.current
     var widthDp by remember {
         mutableStateOf(0.dp)
@@ -1081,11 +1085,16 @@ fun QuickPicks(
                             bottomSheetShow = true
                         },
                         data = it,
-                        widthDp = widthDp,
+                        widthDp = if (isPortrait) widthDp else minOf(widthDp, LandscapeGridItemMaxWidth + 30.dp),
                     )
                 }
             }
         }
+        HorizontalScrollBar(
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+            scrollState = lazyListState,
+            flingBehavior = snapperFlingBehavior,
+        )
     }
 }
 
@@ -1138,6 +1147,11 @@ fun MoodMomentAndGenre(
                     }
                 }
             }
+            HorizontalScrollBar(
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                scrollState = gridState,
+                flingBehavior = flingBehavior,
+            )
         }
     }
 }
@@ -1174,6 +1188,7 @@ fun ChartData(
 
     val lazyListState2 = rememberLazyGridState()
     val snapperFlingBehavior2 = rememberSnapFlingBehavior(SnapLayoutInfoProvider(lazyGridState = lazyListState2))
+    val isPortrait = getScreenSizeInfo().let { it.wDP < it.hDP }
 
     Column(
         Modifier.onGloballyPositioned { coordinates ->
@@ -1244,9 +1259,51 @@ fun ChartData(
                         )
                     },
                     data = data,
-                    widthDp = gridWidthDp,
+                    widthDp = if (isPortrait) gridWidthDp else minOf(gridWidthDp, LandscapeGridItemMaxWidth),
                 )
             }
+        }
+        HorizontalScrollBar(
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+            scrollState = lazyListState2,
+            flingBehavior = snapperFlingBehavior2,
+        )
+        // Ranked podcast shows, laid out exactly like the artist chart above.
+        chart.podcasts?.let { podcasts ->
+            Text(
+                text = podcasts.title,
+                style = typo().headlineMedium,
+                color = MaterialTheme.colorScheme.onBackground,
+                maxLines = 1,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 10.dp),
+            )
+            val podcastGridState = rememberLazyGridState()
+            val podcastFlingBehavior = rememberSnapFlingBehavior(SnapLayoutInfoProvider(lazyGridState = podcastGridState))
+            LazyHorizontalGrid(
+                rows = GridCells.Fixed(3),
+                modifier = Modifier.height(240.dp),
+                state = podcastGridState,
+                flingBehavior = podcastFlingBehavior,
+            ) {
+                items(podcasts.shows.size, key = { index -> podcasts.shows[index].browseId + index }) {
+                    val data = podcasts.shows[it]
+                    ItemArtistChart(
+                        onClick = { navController.navigate(PodcastDestination(podcastId = data.browseId)) },
+                        data = data,
+                        widthDp = if (isPortrait) gridWidthDp else minOf(gridWidthDp, LandscapeGridItemMaxWidth),
+                        thumbnailShape = RoundedCornerShape(8.dp),
+                        subtitle = data.subscribers,
+                    )
+                }
+            }
+            HorizontalScrollBar(
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                scrollState = podcastGridState,
+                flingBehavior = podcastFlingBehavior,
+            )
         }
     }
 }

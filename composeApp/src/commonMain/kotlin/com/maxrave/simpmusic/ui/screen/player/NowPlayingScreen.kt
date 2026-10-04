@@ -61,10 +61,12 @@ import androidx.compose.ui.window.PopupProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.kmpalette.rememberPaletteState
+import com.maxrave.common.Config.MAIN_PLAYER
 import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.mediaservice.handler.MediaPlayerHandler
 import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.Platform
+import com.maxrave.simpmusic.expect.ui.rememberVideoAspectRatio
 import com.maxrave.simpmusic.extension.GradientAngle
 import com.maxrave.simpmusic.extension.GradientOffset
 import com.maxrave.simpmusic.extension.KeepScreenOn
@@ -77,11 +79,15 @@ import com.maxrave.simpmusic.ui.component.AddToPlaylistModalBottomSheet
 import com.maxrave.simpmusic.ui.component.FullscreenLyricsContent
 import com.maxrave.simpmusic.ui.component.FullscreenLyricsSheet
 import com.maxrave.simpmusic.ui.component.InfoPlayerBottomSheet
+import com.maxrave.domain.data.model.browse.album.Track
+import com.maxrave.domain.utils.toSongEntity
 import com.maxrave.simpmusic.ui.component.NowPlayingBottomSheet
 import com.maxrave.simpmusic.ui.component.QueueBottomSheet
+import com.maxrave.simpmusic.ui.component.QueuePosition
 import com.maxrave.simpmusic.ui.component.VoteLyricsDialog
 import com.maxrave.simpmusic.ui.icon.KeyboardArrowDown
 import com.maxrave.simpmusic.ui.icon.SimpIcons
+import com.maxrave.simpmusic.ui.navigation.destination.home.ListenTogetherDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.ArtistDestination
 import com.maxrave.simpmusic.ui.navigation.destination.player.FullscreenDestination
 import com.maxrave.simpmusic.ui.screen.player.content.NowPlayingContentActions
@@ -90,7 +96,8 @@ import com.maxrave.simpmusic.ui.screen.player.content.NowPlayingContentM3Express
 import com.maxrave.simpmusic.ui.screen.player.content.NowPlayingContentSpotify
 import com.maxrave.simpmusic.ui.screen.player.content.NowPlayingContentState
 import com.maxrave.simpmusic.ui.screen.player.content.PlayerBackdropColor
-import com.maxrave.simpmusic.ui.screen.player.content.toAudioCodecLabel
+import com.maxrave.simpmusic.ui.screen.player.content.fullscreenCanvas
+import com.maxrave.simpmusic.ui.screen.player.content.toAudioQualityLabel
 import com.maxrave.simpmusic.viewModel.LyricsProvider
 import com.maxrave.simpmusic.viewModel.NowPlayingBottomSheetUIEvent
 import com.maxrave.simpmusic.viewModel.NowPlayingBottomSheetViewModel
@@ -104,6 +111,7 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
+import kotlin.math.abs
 
 private const val TAG = "NowPlayingScreen"
 
@@ -181,7 +189,7 @@ fun NowPlayingScreenContent(
     val lyricsOffsetMs by sharedViewModel.getLyricsOffsetMs().collectAsStateWithLifecycle(0)
     val likeStatus by sharedViewModel.likeStatus.collectAsStateWithLifecycle()
     val castState by sharedViewModel.castState.collectAsStateWithLifecycle()
-    // Apple Music style's progress-bar codec badge — see NowPlayingContentState.toAudioCodecLabel.
+    // Apple Music style's quality line under the progress bar — see NowPlayingContentState.toAudioQualityLabel.
     val formatState by sharedViewModel.format.collectAsStateWithLifecycle(initialValue = null)
 
     val shouldShowVideo by sharedViewModel.getVideo.collectAsStateWithLifecycle()
@@ -270,7 +278,15 @@ fun NowPlayingScreenContent(
         ) {
             isAnimatingFromPlayer = true
             try {
-                artworkPagerState.animateScrollToPage(target)
+                // Animate only a neighbouring page — that is a track change, and the slide IS the
+                // feedback. A jump of many pages is not: trimming a radio queue's history drops the
+                // current track's index by dozens without changing the track, and animating that
+                // flings the pager through dozens of covers to land on the same song.
+                if (abs(target - artworkPagerState.currentPage) <= 1) {
+                    artworkPagerState.animateScrollToPage(target)
+                } else {
+                    artworkPagerState.scrollToPage(target)
+                }
             } finally {
                 isAnimatingFromPlayer = false
             }
@@ -361,10 +377,20 @@ fun NowPlayingScreenContent(
     var showFullscreenLyrics by rememberSaveable {
         mutableStateOf(false)
     }
+    val fullscreenLyricsRequested by sharedViewModel.fullscreenLyricsRequest.collectAsStateWithLifecycle()
+    LaunchedEffect(fullscreenLyricsRequested) {
+        if (fullscreenLyricsRequested) {
+            showFullscreenLyrics = true
+            sharedViewModel.consumeFullscreenLyricsRequest()
+        }
+    }
 
     var showQueueBottomSheet by rememberSaveable {
         mutableStateOf(false)
     }
+    // A queue row's ⋯ in the Apple Music style, whose queue is a tab of this screen rather than a
+    // sheet: its position and the track that was there. The other styles' queue sheet hosts its own.
+    var queueMoreFor by remember { mutableStateOf<Pair<Int, Track>?>(null) }
 
     var showInfoBottomSheet by rememberSaveable {
         mutableStateOf(false)
@@ -404,7 +430,8 @@ fun NowPlayingScreenContent(
 
     LaunchedEffect(screenDataState) {
         Logger.d(TAG, "ScreenDataState: $screenDataState")
-        showHideMiddleLayout = screenDataState.canvasData == null
+        // Only a canvas that fills the page replaces it; animated artwork sits at its top.
+        showHideMiddleLayout = screenDataState.fullscreenCanvas() == null
     }
 
     // Palette generation lives in its own NEVER-restarting effect. Keyed on screenDataState it
@@ -506,7 +533,7 @@ fun NowPlayingScreenContent(
         }.distinctUntilChangedBy {
             it.canvasData?.url
         }.collectLatest {
-            if (it.canvasData != null && mainScrollState.value == 0) {
+            if (it.fullscreenCanvas() != null && mainScrollState.value == 0) {
                 showHideJob = false
             } else {
                 showHideJob = true
@@ -516,7 +543,7 @@ fun NowPlayingScreenContent(
     }
 
     LaunchedEffect(key1 = showHideControlLayout) {
-        if (showHideControlLayout && screenDataState.canvasData != null && mainScrollState.value == 0) {
+        if (showHideControlLayout && screenDataState.fullscreenCanvas() != null && mainScrollState.value == 0) {
             showHideJob = false
         }
     }
@@ -525,10 +552,10 @@ fun NowPlayingScreenContent(
         snapshotFlow { mainScrollState.value }
             .distinctUntilChanged()
             .collect {
-                if (it > 0 && !showHideControlLayout && screenDataState.canvasData != null) {
+                if (it > 0 && !showHideControlLayout && screenDataState.fullscreenCanvas() != null) {
                     showHideJob = true
                     showHideControlLayout = true
-                } else if (showHideControlLayout && it == 0 && screenDataState.canvasData != null) {
+                } else if (showHideControlLayout && it == 0 && screenDataState.fullscreenCanvas() != null) {
                     showHideJob = false
                 }
             }
@@ -619,11 +646,9 @@ fun NowPlayingScreenContent(
             mainScrollState = mainScrollState,
             isExpanded = isExpanded,
             dismissIcon = dismissIcon,
-            // codecs, NOT mimeType. StreamRepositoryImpl splits YouTube's
-            // `audio/webm; codecs="opus"` with a regex and stores the two halves in SEPARATE
-            // columns: mimeType keeps "audio/webm", codecs keeps "opus". Asking mimeType for the
-            // codec therefore never matched anything and the badge never rendered, on any track.
-            audioCodecLabel = formatState?.codecs.toAudioCodecLabel(),
+            audioQualityLabel = formatState.toAudioQualityLabel(),
+            lyricsOffsetMs = lyricsOffsetMs.toLong(),
+            videoAspectRatio = rememberVideoAspectRatio(MAIN_PLAYER) ?: 16f / 9,
         )
     val actions =
         NowPlayingContentActions(
@@ -660,6 +685,10 @@ fun NowPlayingScreenContent(
                     )
                 }
             },
+            onOpenListenTogether = {
+                onDismiss()
+                navController.navigate(ListenTogetherDestination)
+            },
             onAddToYouTubeLiked = { sharedViewModel.addToYouTubeLiked() },
             onShowMoreSheet = { showSheet = true },
             onShowQueue = { showQueueBottomSheet = true },
@@ -681,6 +710,7 @@ fun NowPlayingScreenContent(
             onRemoveQueueItem = { index ->
                 mediaPlayerHandler.removeMediaItem(index)
             },
+            onQueueItemMore = { index, track -> queueMoreFor = index to track },
         )
 
     // Below `state`/`actions`: the landscape lyrics layout renders the current style's own track row
@@ -793,6 +823,21 @@ fun NowPlayingScreenContent(
             onDismiss = {
                 showQueueBottomSheet = false
             },
+            navController = navController,
+            onNavigateToOtherScreen = {
+                showQueueBottomSheet = false
+                onDismiss()
+            },
+        )
+    }
+
+    queueMoreFor?.let { (index, track) ->
+        NowPlayingBottomSheet(
+            onDismiss = { queueMoreFor = null },
+            navController = navController,
+            song = track.toSongEntity(),
+            queuePosition = QueuePosition(index, track.videoId),
+            onNavigateToOtherScreen = { onDismiss() },
         )
     }
 

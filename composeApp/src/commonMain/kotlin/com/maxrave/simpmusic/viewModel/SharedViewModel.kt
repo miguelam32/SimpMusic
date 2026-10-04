@@ -2,6 +2,7 @@ package com.maxrave.simpmusic.viewModel
 
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.lifecycle.viewModelScope
+import com.maxrave.common.Config
 import com.maxrave.common.Config.ALBUM_CLICK
 import com.maxrave.common.Config.DOWNLOAD_CACHE
 import com.maxrave.common.Config.PLAYLIST_CLICK
@@ -28,6 +29,7 @@ import com.maxrave.domain.data.model.metadata.Lyrics
 import com.maxrave.domain.data.model.streams.TimeLine
 import com.maxrave.domain.data.model.update.UpdateData
 import com.maxrave.domain.data.player.GenericCastState
+import com.maxrave.domain.data.player.LiveStreamRegistry
 import com.maxrave.domain.extension.decodeHtmlEntities
 import com.maxrave.domain.extension.isSong
 import com.maxrave.domain.extension.isVideo
@@ -80,6 +82,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.cancellable
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.filterNotNull
@@ -167,6 +170,22 @@ class SharedViewModel(
 
     private val _showNotificationPermissionDialog = MutableStateFlow(false)
     val showNotificationPermissionDialog: StateFlow<Boolean> = _showNotificationPermissionDialog
+
+    private val _isOfficialBuild = MutableStateFlow(true)
+    val isOfficialBuild: StateFlow<Boolean> = _isOfficialBuild
+
+    // One-shot: the Desktop capsule asks the Now Playing panel, which hosts the page, to open
+    // full-screen lyrics. The panel consumes it once shown.
+    private val _fullscreenLyricsRequest = MutableStateFlow(false)
+    val fullscreenLyricsRequest: StateFlow<Boolean> = _fullscreenLyricsRequest
+
+    fun requestFullscreenLyrics() {
+        _fullscreenLyricsRequest.value = true
+    }
+
+    fun consumeFullscreenLyricsRequest() {
+        _fullscreenLyricsRequest.value = false
+    }
 
     private var getFormatFlowJob: Job? = null
 
@@ -259,12 +278,19 @@ class SharedViewModel(
                                 Pair(timeLine, nowPlayingState)
                             }
                         }.distinctUntilChanged { old, new ->
+                            // A live stream's "total" is the seek window mpv reports, and it grows with
+                            // every new segment — not a new length, so it must not re-run what a new
+                            // length triggers (this fired every few seconds for as long as one played).
+                            val sameLiveStream = old.first.isLive && new.first.isLive
                             (old.first.total.toString() + old.second.songEntity?.videoId).hashCode() ==
-                                (new.first.total.toString() + new.second.songEntity?.videoId).hashCode()
+                                (new.first.total.toString() + new.second.songEntity?.videoId).hashCode() ||
+                                (sameLiveStream && old.second.songEntity?.videoId == new.second.songEntity?.videoId)
                         }.collectLatest {
-                            log("Timeline job ${(it.first.total.toString() + it.second.songEntity?.videoId).hashCode()}")
                             val nowPlaying = it.second
                             val timeline = it.first
+                            // Lyrics and canvas both key off the track's length, which a live stream has none of.
+                            if (timeline.isLive) return@collectLatest
+                            log("Timeline job ${(it.first.total.toString() + it.second.songEntity?.videoId).hashCode()}")
                             if (timeline.total > 0 && nowPlaying.songEntity != null) {
                                 if (nowPlaying.mediaItem.isSong() && nowPlayingScreenData.value.canvasData == null) {
                                     Logger.w(tag, "Duration is ${timeline.total}")
@@ -436,7 +462,9 @@ class SharedViewModel(
 
                             is SimpleMediaState.Progress -> {
                                 if (mediaState.progress >= 0L && mediaState.progress != _timeline.value.current) {
-                                    if (_timeline.value.total > 0L) {
+                                    // A live stream never reports a length (ExoPlayer: C.TIME_UNSET), so
+                                    // a missing one means "loading" for everything except a live stream.
+                                    if (_timeline.value.total > 0L || _timeline.value.isLive) {
                                         _timeline.update {
                                             it.copy(
                                                 total = mediaPlayerHandler.getPlayerDuration().takeIf { d -> d > 0L } ?: it.total,
@@ -519,10 +547,20 @@ class SharedViewModel(
                         }
                     }
                 }
+            val liveStreamJob =
+                launch {
+                    // A track is only known to be live once its stream has been resolved, so this
+                    // follows the registry as well as the track itself.
+                    combine(mediaPlayerHandler.nowPlayingState, LiveStreamRegistry.liveVideoIds) { state, liveVideoIds ->
+                        state.mediaItem.mediaId in liveVideoIds
+                    }.distinctUntilChanged()
+                        .collect { isLive -> _timeline.update { it.copy(isLive = isLive) } }
+                }
             job1.join()
             controllerJob.join()
             sleepTimerJob.join()
             playlistNameJob.join()
+            liveStreamJob.join()
         }
         // Reset downloading songs & playlists to not downloaded
         checkAllDownloadingSongs()
@@ -618,6 +656,7 @@ class SharedViewModel(
                                     NowPlayingScreenData.CanvasData(
                                         isVideo = data.isVideo,
                                         url = data.canvasUrl,
+                                        thumbUrl = data.canvasThumbUrl,
                                     ),
                             )
                         }
@@ -639,6 +678,7 @@ class SharedViewModel(
                                 NowPlayingScreenData.CanvasData(
                                     isVideo = url.isCanvasVideoUrl(),
                                     url = url,
+                                    thumbUrl = nowPlayingState.value?.songEntity?.canvasThumbUrl,
                                 ),
                         )
                     }
@@ -1089,6 +1129,29 @@ class SharedViewModel(
         }
     }
 
+    /**
+     * [signingCerts]: SHA-256 hex of each certificate this APK is signed with. A failed fetch leaves
+     * the app usable — it plays offline, and an unknown answer must not lock out our own users.
+     */
+    fun checkOfficialBuild(
+        packageName: String,
+        signingCerts: List<String>,
+    ) {
+        if (packageName !in Config.OFFICIAL_PACKAGE_NAMES) {
+            _isOfficialBuild.value = false
+            return
+        }
+        viewModelScope.launch {
+            updateRepository.getFdroidSigningKeys().collect { response ->
+                val keys = response.data
+                // No certificate read at all is an unknown answer, and unknown never blocks.
+                if (response is Resource.Success && keys != null && signingCerts.isNotEmpty() && keys.none { it in signingCerts }) {
+                    _isOfficialBuild.value = false
+                }
+            }
+        }
+    }
+
     fun stopPlayer() {
         _nowPlayingScreenData.value = NowPlayingScreenData.initial()
         _nowPlayingState.value = null
@@ -1337,6 +1400,9 @@ class SharedViewModel(
         song: SongEntity,
         duration: Int,
     ) {
+        // A live broadcast has nothing to sync lyrics to — the "duration" mpv reports for it is only
+        // its seek window — so no provider is asked. Every caller comes through here.
+        if (LiveStreamRegistry.isLive(song.videoId)) return
         viewModelScope.launch {
             val videoId = song.videoId
             log("Get Lyrics From Format for $videoId", LogLevel.WARN)
@@ -1812,8 +1878,6 @@ class SharedViewModel(
         }
     }
 
-    fun getTranslucentBottomBar() = dataStoreManager.translucentBottomBar
-
     fun getEnableLiquidGlass() = dataStoreManager.enableLiquidGlass
 
     fun getLocalTrackingEnabled() = dataStoreManager.localTrackingEnabled
@@ -2134,6 +2198,10 @@ data class NowPlayingScreenData(
     data class CanvasData(
         val isVideo: Boolean,
         val url: String,
+        // A still of the clip at the clip's own size — Apple Music's animated artwork sends one.
+        // The Apple Music player shows it under the clip while that loads, and reads the clip's
+        // proportions off it, so the frame is the right shape before the first video frame arrives.
+        val thumbUrl: String? = null,
     )
 
     data class LyricsData(
