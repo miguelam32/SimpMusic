@@ -15,6 +15,11 @@
         <item quantity="one">%1$d song</item>
         <item quantity="other">%1$d songs</item>
     </plurals>
+    <plurals name="library_artist_count">
+        <item quantity="one">%1$d artist</item>
+        <item quantity="other">%1$d artists</item>
+    </plurals>
+    <string name="library_favorite_empty_hint">Tap the heart on any song to keep it here.</string>
     <string name="like">Like</string>
     <string name="hello_blank_fragment">Hello blank fragment</string>
     <string name="download">Download</string>
@@ -99,6 +104,7 @@
     <string name="move_down">Move down</string>
     <string name="delete_from_queue">Delete from queue</string>
     <string name="more">More</string>
+    <string name="play_all">Play all</string>
     <string name="singles">Singles</string>
     <string name="related_artists">Related Artists</string>
     <string name="about">About</string>
@@ -134,7 +140,7 @@
     <string name="developer_blog">Developer Blog</string>
     <string name="developer_blog_tagline">Read dev notes, tutorials &amp; behind-the-scenes</string>
     <string name="blog_promo_title">Something new from the dev</string>
-    <string name="blog_promo_message">I just launched my personal blog at maxrave.dev — sharing the story behind SimpMusic, music-tech deep dives, and engineering notes. Give it a read if you're curious ✨</string>
+    <string name="blog_promo_message">I just launched the SimpMusic blog at simpmusic.org — sharing the story behind SimpMusic, music-tech deep dives, and engineering notes. Give it a read if you're curious ✨</string>
     <string name="visit_blog">Visit blog</string>
     <string name="paypal">PayPal</string>
     <string name="title">Title</string>
@@ -314,6 +320,8 @@
     <string name="play_video_instead_of_audio_warning">This action will delete player cache. Continue?</string>
     <string name="quality_video">Video Quality</string>
     <string name="add_to_queue">Add to queue</string>
+    <string name="add_to_queue_disabled_radio">Add to queue (disabled while a radio or mix is playing)</string>
+    <string name="add_to_queue_disabled_endless">Add to queue (disabled when endless queue is enabled)</string>
     <string name="added_to_queue">Added to queue</string>
     <string name="new_release">New release</string>
     <string name="music_video">Music video</string>
@@ -974,4 +982,18 @@
     <string name="weekday_friday">Friday</string>
     <string name="weekday_saturday">Saturday</string>
     <string name="weekday_sunday">Sunday</string>
+    <string name="developer_option">Developer option</string>
+    <string name="app_log">App log</string>
+    <string name="app_log_description">View, filter and export the app's log</string>
+    <string name="log_errors">Errors</string>
+    <string name="log_search_hint">Search tag or message</string>
+    <string name="log_level_info">Info</string>
+    <string name="log_level_warn">Warn</string>
+    <string name="log_live">Live · %1$s lines</string>
+    <string name="log_paused">Paused · %1$s lines</string>
+    <string name="log_empty">Nothing logged yet</string>
+    <string name="log_no_stack_trace">No stack trace</string>
+    <string name="log_stack_trace_lines">Stack trace · %1$s lines</string>
+    <string name="log_hide_stack_trace">Hide stack trace</string>
+    <string name="log_export_failed">Could not export the log</string>
 </resources>
