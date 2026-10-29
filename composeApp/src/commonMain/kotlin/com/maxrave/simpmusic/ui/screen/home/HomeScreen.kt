@@ -1196,6 +1196,20 @@ private fun Modifier.chipStripEdgeFades(
             }
         }
 
+// Opaque → transparent left to right when [fadingOut], the other way round otherwise; [fade] scales
+// how far towards transparent the far end goes.
+private fun chipFadeStops(
+    fade: Float,
+    fadingOut: Boolean,
+): Array<Pair<Float, Color>> =
+    Array(CHIP_FADE_STEPS + 1) { i ->
+        val t = i / CHIP_FADE_STEPS.toFloat()
+        val ramp = t * t * (3f - 2f * t)
+        t to Color.Black.copy(alpha = 1f - fade * (if (fadingOut) ramp else 1f - ramp))
+    }
+
+private const val CHIP_FADE_STEPS = 24
+
 /**
  * The avatar at the start of Home's header. It opens a menu showing who is signed in and the
  * greeting the old app bar used to show. Signed out, the avatar is a person glyph and the menu
