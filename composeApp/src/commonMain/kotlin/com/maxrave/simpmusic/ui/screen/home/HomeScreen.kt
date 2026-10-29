@@ -1195,6 +1195,14 @@ private fun Modifier.chipStripEdgeFades(
                 )
             }
         }
+
+/**
+ * The avatar at the start of Home's header. It opens a menu showing who is signed in and the
+ * greeting the old app bar used to show. Signed out, the avatar is a person glyph and the menu
+ * offers the log-in.
+ */
+@Composable
+private fun HomeAccountButton(
     accountName: String?,
     thumbnailUrl: String?,
     navController: NavController,
