@@ -160,6 +160,14 @@ android {
     }
 }
 
+
+androidComponents {
+    beforeVariants { variant ->
+        // Compose Preview + Layoutlib necesitan unit tests habilitados
+        variant.enableUnitTest = true
+    }
+}
+
 dependencies {
     coreLibraryDesugaring(libs.desugaring)
     val debugImplementation = "debugImplementation"
