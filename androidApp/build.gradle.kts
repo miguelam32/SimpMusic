@@ -164,7 +164,7 @@ android {
 androidComponents {
     beforeVariants { variant ->
         // Compose Preview + Layoutlib necesitan unit tests habilitados
-        variant.enableUnitTest = true
+        (variant as? com.android.build.api.variant.HasUnitTestBuilder)?.enableUnitTest = true
     }
 }
 
