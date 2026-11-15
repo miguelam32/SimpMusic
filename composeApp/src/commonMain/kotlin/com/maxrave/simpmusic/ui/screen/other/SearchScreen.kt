@@ -103,7 +103,10 @@ import com.maxrave.domain.utils.connectArtists
 import com.maxrave.domain.utils.toSongEntity
 import com.maxrave.domain.utils.toTrack
 import com.maxrave.simpmusic.Platform
+import com.maxrave.simpmusic.expect.ui.DesktopMiniPlayerClearance
 import com.maxrave.simpmusic.expect.ui.PlatformBackHandler
+import com.maxrave.simpmusic.expect.ui.SongRecognitionSheet
+import com.maxrave.simpmusic.expect.ui.VerticalScrollBar
 import com.maxrave.simpmusic.expect.ui.layerBackdrop
 import com.maxrave.simpmusic.expect.ui.rememberBackdrop
 import com.maxrave.simpmusic.extension.getScreenSizeInfo
@@ -129,6 +132,7 @@ import com.maxrave.simpmusic.ui.component.selection.rememberSongSelectionState
 import com.maxrave.simpmusic.ui.icon.ArrowBackIosNew
 import com.maxrave.simpmusic.ui.icon.ArrowOutward
 import com.maxrave.simpmusic.ui.icon.Close
+import com.maxrave.simpmusic.ui.icon.GraphicEq
 import com.maxrave.simpmusic.ui.icon.History
 import com.maxrave.simpmusic.ui.icon.Search
 import com.maxrave.simpmusic.ui.icon.SimpIcons
@@ -138,6 +142,7 @@ import com.maxrave.simpmusic.ui.navigation.destination.list.ArtistDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.PlaylistDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.PodcastDestination
 import com.maxrave.simpmusic.ui.navigation.destination.search.SearchDestination
+import com.maxrave.simpmusic.ui.theme.ArtworkShape
 import com.maxrave.simpmusic.ui.theme.LocalLiquidGlassEnabled
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.SearchScreenUIState
@@ -165,6 +170,7 @@ import simpmusic.composeapp.generated.resources.in_search
 import simpmusic.composeapp.generated.resources.no_results_found
 import simpmusic.composeapp.generated.resources.playlists
 import simpmusic.composeapp.generated.resources.podcasts
+import simpmusic.composeapp.generated.resources.recognize_song
 import simpmusic.composeapp.generated.resources.retry
 import simpmusic.composeapp.generated.resources.search_for
 import simpmusic.composeapp.generated.resources.search_for_songs_artists_albums_playlists_and_more
@@ -279,6 +285,15 @@ fun SearchScreen(
     val selectionViewModel: SongSelectionViewModel = koinViewModel()
     var showSelectionSheet by rememberSaveable { mutableStateOf(false) }
     var showSelectionAddToPlaylist by rememberSaveable { mutableStateOf(false) }
+    var showRecognition by rememberSaveable { mutableStateOf(false) }
+    // The sheet asked for by simpmusic://recognize (the Quick Settings tile), opened once and cleared.
+    val songRecognitionRequest by sharedViewModel.songRecognitionRequest.collectAsStateWithLifecycle()
+    LaunchedEffect(songRecognitionRequest) {
+        if (songRecognitionRequest) {
+            showRecognition = true
+            sharedViewModel.requestSongRecognition(false)
+        }
+    }
     val currentVideoId by searchViewModel.nowPlayingVideoId.collectAsStateWithLifecycle()
     val chipRowState = rememberScrollState()
     val pullToRefreshState = rememberPullToRefreshState()
@@ -387,6 +402,27 @@ fun SearchScreen(
             song = sheetSong,
         )
     }
+    if (showRecognition) {
+        SongRecognitionSheet(
+            onFind = { query ->
+                searchText = query
+                focusManager.clearFocus()
+                isSearchSubmitted = true
+                searchViewModel.insertSearchHistory(query)
+                when (searchScreenState.searchType) {
+                    SearchType.ALL -> searchViewModel.searchAll(query)
+                    SearchType.SONGS -> searchViewModel.searchSongs(query)
+                    SearchType.VIDEOS -> searchViewModel.searchVideos(query)
+                    SearchType.ALBUMS -> searchViewModel.searchAlbums(query)
+                    SearchType.ARTISTS -> searchViewModel.searchArtists(query)
+                    SearchType.PLAYLISTS -> searchViewModel.searchPlaylists(query)
+                    SearchType.FEATURED_PLAYLISTS -> searchViewModel.searchFeaturedPlaylist(query)
+                    SearchType.PODCASTS -> searchViewModel.searchPodcast(query)
+                }
+            },
+            onDismiss = { showRecognition = false },
+        )
+    }
 
     Box(
         modifier =
@@ -413,6 +449,7 @@ fun SearchScreen(
                                 onItemClick = { item ->
                                     when (item) {
                                         is SongsResult, is VideosResult -> {
+                                            focusManager.clearFocus()
                                             val firstTrack: Track = (item as? SongsResult)?.toTrack() ?: (item as VideosResult).toTrack()
                                             searchViewModel.setQueueData(
                                                 QueueData.Data(
@@ -503,6 +540,10 @@ fun SearchScreen(
                             )
                         }
                     }
+                    VerticalScrollBar(
+                        scrollState = suggestionsState,
+                        modifier = Modifier.padding(top = searchBarHeight, bottom = DesktopMiniPlayerClearance),
+                    )
                 }
 
                 SearchUIType.SEARCH_HISTORY -> {
@@ -595,6 +636,10 @@ fun SearchScreen(
                             }
                         }
                     }
+                    VerticalScrollBar(
+                        scrollState = historyState,
+                        modifier = Modifier.padding(top = searchBarHeight, bottom = DesktopMiniPlayerClearance),
+                    )
                 }
 
                 SearchUIType.EMPTY -> {
@@ -692,6 +737,10 @@ fun SearchScreen(
                                 EndOfPage()
                             }
                         }
+                        VerticalScrollBar(
+                            scrollState = moodGridState,
+                            modifier = Modifier.padding(top = searchBarHeight, bottom = DesktopMiniPlayerClearance),
+                        )
                         }
                     }
                 }
@@ -914,6 +963,10 @@ fun SearchScreen(
                                                         // Space at bottom to account for bottom navigation and mini player
                                                         item { Spacer(modifier = Modifier.height(150.dp)) }
                                                     }
+                                                    VerticalScrollBar(
+                                                        scrollState = resultsState,
+                                                        modifier = Modifier.padding(top = searchBarHeight, bottom = DesktopMiniPlayerClearance),
+                                                    )
                                                 } else {
                                                     Box(
                                                         modifier = Modifier.fillMaxSize(),
@@ -1132,6 +1185,17 @@ fun SearchScreen(
                                     contentDescription = "Clear search",
                                 )
                             }
+                        } else if (getPlatform() == Platform.Android) {
+                            // An empty field offers song recognition instead (Android only).
+                            IconButton(
+                                modifier = Modifier.clip(CircleShape),
+                                onClick = { showRecognition = true },
+                            ) {
+                                Icon(
+                                    imageVector = SimpIcons.GraphicEq,
+                                    contentDescription = stringResource(Res.string.recognize_song),
+                                )
+                            }
                         }
                     },
                 )
@@ -1247,7 +1311,7 @@ fun SuggestItemRow(
                             if (searchResult is ArtistsResult) {
                                 CircleShape
                             } else {
-                                RoundedCornerShape(4.dp)
+                                ArtworkShape
                             },
                         ),
             )

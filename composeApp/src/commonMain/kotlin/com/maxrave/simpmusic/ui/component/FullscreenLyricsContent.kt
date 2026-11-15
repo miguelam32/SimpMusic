@@ -120,6 +120,7 @@ import com.maxrave.simpmusic.ui.screen.player.content.NowPlayingTrackInfoRow
 import com.maxrave.simpmusic.ui.screen.player.content.SpotifyPlaybackControls
 import com.maxrave.simpmusic.ui.screen.player.content.applemusic.AppleMusicPlaybackControls
 import com.maxrave.simpmusic.ui.screen.player.content.applemusic.rememberAppleMusicTypography
+import com.maxrave.simpmusic.ui.theme.ArtworkShape
 import com.maxrave.simpmusic.ui.theme.LocalLiquidGlassEnabled
 import com.maxrave.simpmusic.ui.theme.seed
 import com.maxrave.simpmusic.ui.theme.typo
@@ -363,7 +364,7 @@ fun FullscreenLyricsContent(
                             modifier =
                                 Modifier
                                     .size(45.dp)
-                                    .clip(RoundedCornerShape(8.dp)),
+                                    .clip(ArtworkShape),
                         )
 
                         Spacer(modifier = Modifier.width(12.dp))
@@ -893,7 +894,7 @@ private fun FullscreenLyricsLandscape(
                                 Modifier
                                     .padding(horizontal = 20.dp)
                                     .size(artworkSize)
-                                    .clip(RoundedCornerShape(12.dp)),
+                                    .clip(ArtworkShape),
                         )
                         Spacer(modifier = Modifier.height(20.dp))
                         when (nowPlayingStyle) {
@@ -1152,6 +1153,19 @@ private fun FullscreenLyricsList(
                     )
                 }
             }
+        }
+        // Bottom-start, clear of the offset button at bottom-end; glass like the rest of this page's
+        // floating chrome. Shows only what the remote config places under the lyrics, and only over
+        // lyrics, as on the Apple Music player's Lyrics tab.
+        if (lyricsData != null) {
+            LyricsPromoLine(
+                backdrop = backdrop,
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(start = 12.dp, end = 72.dp, bottom = 12.dp),
+                sharedViewModel = sharedViewModel,
+            )
         }
         // Here rather than in either layout, so portrait, landscape and Desktop all get it. Bottom-end,
         // over the dimmest lines. Glass, like the rest of this page's floating chrome.
