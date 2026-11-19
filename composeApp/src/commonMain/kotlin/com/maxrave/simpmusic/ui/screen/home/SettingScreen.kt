@@ -1,5 +1,7 @@
 package com.maxrave.simpmusic.ui.screen.home
 
+import androidx.compose.ui.draw.alpha
+import com.maxrave.domain.manager.AudioEffectMode
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.fadeIn
@@ -1562,17 +1564,18 @@ fun SettingScreen(
                 AnimatedVisibility(visible = delayEnabled) {
                     DelaySection()
                 }
-                SettingItem(
+                val reverbMode by viewModel.reverbMode.collectAsStateWithLifecycle()
+                AudioEffectModeItem(
                     title = stringResource(Res.string.audio_reverb),
                     subtitle = stringResource(Res.string.audio_reverb_description),
-                    smallSubtitle = true,
-                    switch = (reverbEnabled to { viewModel.setReverbEnabled(it) }),
+                    mode = reverbMode,
+                    onModeChange = { viewModel.setReverbMode(it) },
                 )
-                // Same again: the room and the wet level outlive the switch.
-                AnimatedVisibility(visible = reverbEnabled) {
+                AnimatedVisibility(visible = reverbMode != AudioEffectMode.OFF) {
                     ReverbSection()
                 }
-                SettingItem(
+                val eightDMode by viewModel.eightDMode.collectAsStateWithLifecycle()
+                AudioEffectModeItem(
                     title = stringResource(Res.string.audio_eight_d),
                     subtitle =
                         when {
@@ -1580,12 +1583,11 @@ fun SettingScreen(
                             !eightDAvailable -> stringResource(Res.string.eight_d_unavailable)
                             else -> stringResource(Res.string.audio_eight_d_description)
                         },
-                    smallSubtitle = true,
-                    switch = (eightDEnabled to viewModel::setEightDEnabled),
-                    // A saved on-state may still be switched off when the native filter is absent.
-                    isEnable = !castState.isRemote && (eightDAvailable || eightDEnabled),
+                    mode = eightDMode,
+                    enabled = !castState.isRemote && (eightDAvailable || eightDMode != AudioEffectMode.OFF),
+                    onModeChange = { viewModel.setEightDMode(it) },
                 )
-                AnimatedVisibility(visible = eightDEnabled && eightDAvailable && !castState.isRemote) {
+                AnimatedVisibility(visible = eightDMode != AudioEffectMode.OFF && eightDAvailable && !castState.isRemote) {
                     EightDSection()
                 }
                 SettingItem(
@@ -3655,4 +3657,60 @@ private fun ImportProgressDialog(
             }
         },
     )
+}
+
+@Composable
+private fun AudioEffectModeItem(
+    title: String,
+    subtitle: String,
+    mode: AudioEffectMode,
+    enabled: Boolean = true,
+    onModeChange: (AudioEffectMode) -> Unit,
+) {
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .alpha(if (enabled) 1f else 0.5f),
+    ) {
+        Text(text = title, style = MaterialTheme.typography.titleMedium)
+        Text(
+            text = subtitle,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(8.dp))
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(50))
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+        ) {
+            listOf(
+                AudioEffectMode.AUTO to "AUTO",
+                AudioEffectMode.OFF to "OFF",
+                AudioEffectMode.ON to "ON",
+            ).forEach { (m, label) ->
+                val selected = m == mode
+                Box(
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(50))
+                            .background(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent)
+                            .clickable(enabled = enabled) { onModeChange(m) }
+                            .padding(vertical = 10.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+    }
 }

@@ -1,5 +1,6 @@
 package com.maxrave.simpmusic.viewModel
 
+import com.maxrave.domain.manager.AudioEffectMode
 import androidx.lifecycle.viewModelScope
 import coil3.PlatformContext
 import coil3.SingletonImageLoader
@@ -2017,6 +2018,25 @@ class SettingsViewModel(
 
     fun setDelayMix(mix: Float) {
         viewModelScope.launch { dataStoreManager.setDelayMix(mix) }
+    }
+
+    private val _reverbMode = MutableStateFlow(AudioEffectMode.OFF)
+    val reverbMode: StateFlow<AudioEffectMode> = _reverbMode
+    private val _eightDMode = MutableStateFlow(AudioEffectMode.OFF)
+    val eightDMode: StateFlow<AudioEffectMode> = _eightDMode
+
+    init {
+        viewModelScope.launch { dataStoreManager.reverbMode.collect { _reverbMode.value = it } }
+        viewModelScope.launch { dataStoreManager.eightDMode.collect { _eightDMode.value = it } }
+    }
+
+    fun setReverbMode(mode: AudioEffectMode) {
+        viewModelScope.launch { dataStoreManager.setReverbMode(mode) }
+    }
+
+    fun setEightDMode(mode: AudioEffectMode) {
+        if (mode == AudioEffectMode.ON && !eightDAvailable.value) return
+        viewModelScope.launch { dataStoreManager.setEightDMode(mode) }
     }
 
     fun setReverbEnabled(enabled: Boolean) {
